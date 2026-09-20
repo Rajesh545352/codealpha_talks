@@ -1,1 +1,97 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
+def clean_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Cleans the unemployment dataset by fixing column names, dropping nulls, 
+    and formatting dates.
+    """
+    # Strip whitespace from column names
+    df.columns = df.columns.str.strip()
+    
+    # Drop rows that are completely empty or missing the Date
+    df = df.dropna(how='all')
+    df = df.dropna(subset=['Date'])
+    
+    # Clean string column values
+    df['Region'] = df['Region'].str.strip()
+    df['Area'] = df['Area'].str.strip()
+    
+    # Convert 'Date' to datetime objects and sort
+    df['Date'] = pd.to_datetime(df['Date'].str.strip(), format='%d-%m-%Y')
+    df = df.sort_values(by='Date')
+    
+    return df
+
+def plot_overall_trend(df: pd.DataFrame):
+    """Generates and saves a line plot of the overall unemployment trend."""
+    monthly_avg = df.groupby('Date')['Estimated Unemployment Rate (%)'].mean().reset_index()
+    
+    plt.figure(figsize=(10, 6))
+    sns.lineplot(data=monthly_avg, x='Date', y='Estimated Unemployment Rate (%)', marker='o')
+    plt.title('Average Unemployment Rate in India (May 2019 - Jun 2020)')
+    plt.ylabel('Unemployment Rate (%)')
+    plt.xlabel('Date')
+    
+    # Mark the start of the COVID-19 lockdown in India
+    plt.axvline(pd.to_datetime('2020-03-24'), color='red', linestyle='--', label='COVID-19 Lockdown Started')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig('unemployment_trend.png')
+    plt.show()
+
+def plot_rural_vs_urban(df: pd.DataFrame):
+    """Generates and saves a line plot comparing Rural vs Urban unemployment."""
+    area_avg = df.groupby(['Date', 'Area'])['Estimated Unemployment Rate (%)'].mean().reset_index()
+    
+    plt.figure(figsize=(10, 6))
+    sns.lineplot(data=area_avg, x='Date', y='Estimated Unemployment Rate (%)', hue='Area', marker='o')
+    plt.title('Rural vs Urban Unemployment Rate')
+    plt.ylabel('Unemployment Rate (%)')
+    plt.xlabel('Date')
+    
+    plt.axvline(pd.to_datetime('2020-03-24'), color='red', linestyle='--', label='COVID-19 Lockdown Started')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig('rural_vs_urban.png')
+    plt.show()
+
+def generate_covid_insights(df: pd.DataFrame):
+    """Calculates and prints statistical insights comparing pre-COVID to COVID periods."""
+    # Segment data into Pre-COVID and During COVID
+    df['Period'] = df['Date'].apply(
+        lambda x: 'During COVID (Apr-Jun 2020)' if x >= pd.to_datetime('2020-04-01') 
+        else 'Pre-COVID (May 2019-Mar 2020)'
+    )
+    
+    # Calculate summary statistics
+    summary_stats = df.groupby('Period')['Estimated Unemployment Rate (%)'].agg(['mean', 'median', 'max']).reset_index()
+    
+    print("--- Summary Statistics ---")
+    print(summary_stats.to_string(index=False))
+    
+    # Find worst hit regions during the lockdown
+    covid_df = df[df['Period'] == 'During COVID (Apr-Jun 2020)']
+    peak_unemployment = covid_df.groupby('Region')['Estimated Unemployment Rate (%)'].max().sort_values(ascending=False).head(5)
+    
+    print("\n--- Peak Unemployment by Region during COVID (%) ---")
+    print(peak_unemployment.to_string())
+
+if __name__ == "__main__":
+    # Ensure your dataset is saved as 'Unemployment in India.csv' in the same directory
+    dataset_path = 'Unemployment in India.csv'
+    
+    try:
+        raw_df = pd.read_csv(dataset_path)
+        cleaned_df = clean_data(raw_df)
+        
+        # Execute analysis functions
+        plot_overall_trend(cleaned_df)
+        plot_rural_vs_urban(cleaned_df)
+        generate_covid_insights(cleaned_df)
+        
+    except FileNotFoundError:
+        print(f"Error: Could not find '{dataset_path}'. Please verify the file location.")
